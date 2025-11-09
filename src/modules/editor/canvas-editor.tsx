@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,14 @@ const CanvasEditor = ({
 }: CanvasEditorProps) => {
   const [showComparison, setShowComparison] = useState(false);
   const [sliderPosition, setSliderPosition] = useState(50);
+  const [imageKey, setImageKey] = useState(0); // Force re-render when image changes
+
+  // Force re-render when processedImage changes to bypass browser caching
+  useEffect(() => {
+    if (processedImage) {
+      setImageKey(prev => prev + 1);
+    }
+  }, [processedImage]);
 
   const handleSliderMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -117,6 +125,7 @@ const CanvasEditor = ({
         ) : (
           <div className="w-full h-full">
             <img
+              key={imageKey} // Force re-render to bypass caching
               src={processedImage || originalImage}
               alt={processedImage ? "Processed" : "Original"}
               className="w-full h-full object-contain"

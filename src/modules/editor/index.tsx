@@ -59,6 +59,14 @@ const primaryTools = [
     hasPrompt: true,
   },
   {
+    id: "e-gemini-edit",
+    name: "Gemini Edit",
+    icon: Zap,
+    color: "primary",
+    description: "Edit image with Gemini AI",
+    hasGeminiInputs: true,
+  },
+  {
     id: "bg-genfill",
     name: "Generative Fill",
     icon: Expand,
@@ -124,6 +132,8 @@ const Editor = () => {
   const [activeEffects, setActiveEffects] = useState<Set<string>>(new Set());
   const [promptText, setPromptText] = useState<string>("");
   const [showPromptInput, setShowPromptInput] = useState<boolean>(false);
+  const [geminiPrompt, setGeminiPrompt] = useState<string>("");
+  const [showGeminiInputs, setShowGeminiInputs] = useState<boolean>(false);
 
   const handleImageUpload = (imageUrl: string) => {
     setUploadedImage(imageUrl);
@@ -141,6 +151,13 @@ const Editor = () => {
     await applyEffect(tool.id, promptText);
     setShowPromptInput(false);
     setPromptText("");
+  };
+
+  const handleGeminiSubmit = async () => {
+    if (!geminiPrompt.trim()) return;
+
+    await applyGeminiEffect();
+    setShowGeminiInputs(false);
   };
 
   const getImageKitTransform = (tooldId: string, prompt?: string): string => {
@@ -197,6 +214,13 @@ const Editor = () => {
     if (tool.hasPrompt) {
       setShowPromptInput(true);
       setPromptText("");
+      return;
+    }
+
+    // Check if tool requires Gemini inputs
+    if ((tool as any).hasGeminiInputs) {
+      setGeminiPrompt("edit existing image with nano banana");
+      setShowGeminiInputs(true);
       return;
     }
 
@@ -301,10 +325,86 @@ const Editor = () => {
     }
   };
 
+  const applyGeminiEffect = async () => {
+    if (!uploadedImage) return;
+
+    const newJob: ProcessingJob = {
+      id: Date.now().toString(),
+      type: "e-gemini-edit",
+      status: "queued",
+      progress: 0,
+    };
+
+    setCurrentJob(newJob);
+
+    try {
+      setCurrentJob((prev) =>
+        prev ? { ...prev, status: "processing", progress: 20 } : null
+      );
+
+      // Fetch the image as base64
+      const response = await fetch(uploadedImage);
+      const blob = await response.blob();
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
+
+      setCurrentJob((prev) =>
+        prev ? { ...prev, progress: 50 } : null
+      );
+
+      // Call Gemini API
+      const geminiResponse = await fetch("/api/gemini/edit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          imageData: base64,
+          prompt: geminiPrompt,
+        }),
+      });
+
+      if (!geminiResponse.ok) {
+        throw new Error("Gemini API request failed");
+      }
+
+      const result = await geminiResponse.json();
+
+      // The result.editedImage is now the base64 image directly from Gemini
+      const generatedImageUrl = result.editedImage;
+
+      // Set the processed image directly to the generated image
+      setProcessedImage(generatedImageUrl);
+      setCurrentJob((prev) =>
+        prev ? { ...prev, progress: 100, status: "completed" } : null
+      );
+
+      const completedJob = {
+        ...newJob,
+        status: "completed" as JobStatus,
+        progress: 100,
+        result: generatedImageUrl,
+      };
+      setEditHistory((prev) => [completedJob, ...prev.slice(0, 2)]);
+    } catch (error) {
+      console.error("Error applying Gemini effect:", error);
+      setCurrentJob((prev) => (prev ? { ...prev, status: "error" } : null));
+    }
+  };
+
   const handleExport = (format: string) => {
     if (!processedImage) return;
 
-    saveAs(processedImage, `pixora-${Date.now()}.${format}`);
+    // For Gemini-generated images (Base64), use the data URL directly
+    if (processedImage.startsWith('data:image/')) {
+      saveAs(processedImage, `pixora-${Date.now()}.jpg`);
+    } else {
+      // For ImageKit URLs, use the original saveAs logic
+      saveAs(processedImage, `pixora-${Date.now()}.${format}`);
+    }
   };
 
   return (
@@ -374,6 +474,46 @@ const Editor = () => {
                     <Button
                       variant="outline"
                       onClick={() => setShowPromptInput(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Gemini Inputs */}
+              {showGeminiInputs && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="space-y-3 p-4 glass rounded-lg border border-card-border"
+                >
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-2 block">
+                        Write prompt to edit image
+                      </label>
+                      <textarea
+                        value={geminiPrompt}
+                        onChange={(e) => setGeminiPrompt(e.target.value)}
+                        placeholder="Describe how you want to edit the image..."
+                        className="w-full p-3 bg-background border border-border rounded-md text-foreground placeholder:text-muted-foreground resize-none"
+                        rows={3}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleGeminiSubmit}
+                      disabled={!geminiPrompt.trim()}
+                      className="flex-1"
+                    >
+                      Apply
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowGeminiInputs(false)}
                     >
                       Cancel
                     </Button>

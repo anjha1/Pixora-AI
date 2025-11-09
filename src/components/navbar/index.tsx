@@ -70,6 +70,9 @@ const Navbar = () => {
             <span className="text-2xl font-bold bg-gradient-primary !bg-clip-text text-transparent">
               Pixora AI
             </span>
+            <p className="text-sm text-muted-foreground mt-1">
+              Powered by AI Magic
+            </p>
           </motion.div>
 
           {/* Navigation */}
@@ -94,7 +97,7 @@ const Navbar = () => {
                     <span>Profile</span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuContent align="end" className="w-48 glass border border-card-border backdrop-blur-glass">
                   <DropdownMenuItem asChild>
                     <Link href="/profile" className="flex items-center space-x-2">
                       <User className="h-4 w-4" />
